@@ -12,11 +12,13 @@ scripts/
   toggle-sidebar.sh   <- main user-facing toggle (<prefix>t)
   ensure-sidebar-pane.sh  <- creates/maintains sidebar pane per window
   close-sidebar.sh    <- tears down all sidebar panes, restores layouts
+  apply-key-overrides.sh  <- rebinds toggle/focus keys from user options
   update-pane-state.sh    <- agent hook entry point, writes pane JSON state
   refresh-sidebar.sh  <- triggers sidebar re-render
   remember-main-pane.sh   <- tracks last active non-sidebar pane
   clear-pane-state.sh     <- clears agent badge on pane focus
   focus-main-pane.sh      <- returns focus to main pane
+  focus-sidebar.sh        <- toggle focus between sidebar and main pane
   handle-pane-exited.sh   <- cleanup when a pane exits
   add-window.sh / add-session.sh  <- prompted creation of windows/sessions
   configure-pane-border-format.sh <- pane border format wrapping
@@ -24,7 +26,7 @@ scripts/
 tests/
   testlib.sh          <- test framework with fake tmux binary
   run.sh              <- test runner
-  *_test.sh           <- unit tests (28 files)
+  *_test.sh           <- unit tests (30 files)
 examples/
   claude-hook.sh / codex-hook.sh / opencode-hook.sh  <- agent integration hooks
 ```
