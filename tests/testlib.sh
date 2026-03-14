@@ -558,6 +558,12 @@ PY
   new-session)
     printf 'new-session %s\n' "$*" >> "$data_dir/commands.log"
     ;;
+  bind-key)
+    printf 'bind-key %s\n' "$*" >> "$data_dir/commands.log"
+    ;;
+  unbind-key)
+    printf 'unbind-key %s\n' "$*" >> "$data_dir/commands.log"
+    ;;
   *)
     echo "unsupported fake tmux command: $command_name" >&2
     exit 1
