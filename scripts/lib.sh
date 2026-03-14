@@ -2,7 +2,7 @@
 set -euo pipefail
 
 print_state_dir() {
-  printf '%s\n' "${TMUX_SIDEBAR_STATE_DIR:-$HOME/.tmux-sidebar/state}"
+  printf '%s\n' "${TMUX_SIDEBAR_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/tmux-sidebar}"
 }
 
 sidebar_pane_title() {

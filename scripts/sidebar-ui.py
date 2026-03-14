@@ -13,7 +13,10 @@ from collections import OrderedDict
 from pathlib import Path
 
 
-STATE_DIR = Path(os.environ.get("TMUX_SIDEBAR_STATE_DIR", str(Path.home() / ".tmux-sidebar/state")))
+STATE_DIR = Path(os.environ.get(
+    "TMUX_SIDEBAR_STATE_DIR",
+    os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state")) + "/tmux-sidebar",
+))
 DEFAULT_SIDEBAR_WIDTH = 25
 DEFAULT_SHORTCUTS = {
     "add_window": "aw",
