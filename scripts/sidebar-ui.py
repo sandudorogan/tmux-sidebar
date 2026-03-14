@@ -5,6 +5,7 @@ import argparse
 import curses
 import json
 import os
+import re
 import subprocess
 from collections import OrderedDict
 from pathlib import Path
@@ -12,6 +13,27 @@ from pathlib import Path
 
 STATE_DIR = Path(os.environ.get("TMUX_SIDEBAR_STATE_DIR", str(Path.home() / ".tmux-sidebar/state")))
 DEFAULT_SIDEBAR_WIDTH = 35
+SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
+NON_AGENT_COMMANDS = {
+    "",
+    "ash",
+    "bash",
+    "fish",
+    "htop",
+    "ksh",
+    "less",
+    "nano",
+    "nvim",
+    "sh",
+    "ssh",
+    "tail",
+    "tmux",
+    "top",
+    "vi",
+    "vim",
+    "yazi",
+    "zsh",
+}
 
 
 def run_tmux(*args: str) -> str:
@@ -43,6 +65,46 @@ def configured_sidebar_width() -> int:
         if width > 0:
             return width
     return DEFAULT_SIDEBAR_WIDTH
+
+
+def normalize_token(value: str) -> str:
+    token = value.strip().lower()
+    if "/" in token:
+        token = token.rsplit("/", 1)[-1]
+    return token
+
+
+def looks_like_codex(value: str) -> bool:
+    return normalize_token(value).startswith("codex")
+
+
+def looks_like_claude(value: str) -> bool:
+    token = normalize_token(value)
+    return token == "claude" or token.startswith("claude-") or token.startswith("claude_")
+
+
+def looks_like_semver(value: str) -> bool:
+    return bool(SEMVER_PATTERN.match(normalize_token(value)))
+
+
+def should_preserve_live_label(command: str, title: str) -> bool:
+    command_token = normalize_token(command)
+    title_token = normalize_token(title)
+    return command_token in NON_AGENT_COMMANDS or title_token in NON_AGENT_COMMANDS
+
+
+def pane_display_label(command: str, title: str, state: dict | None) -> str:
+    if looks_like_codex(command) or looks_like_codex(title):
+        return "codex"
+    if looks_like_claude(command) or looks_like_claude(title):
+        return "claude"
+
+    app = str((state or {}).get("app", "")).strip().lower()
+    if app == "claude" and not should_preserve_live_label(command, title):
+        if looks_like_semver(command) or looks_like_semver(title):
+            return "claude"
+
+    return command
 
 
 def sidebar_has_focus() -> bool:
@@ -130,8 +192,9 @@ def load_tree() -> list[dict]:
             )
             for pane_index, pane in enumerate(window["panes"]):
                 pane_last = pane_index == len(window["panes"]) - 1
-                badge = badge_for_status(str(pane_states.get(pane["id"], {}).get("status", "")))
-                label = f"{pane['id']} {pane['label']}"
+                pane_state = pane_states.get(pane["id"], {})
+                badge = badge_for_status(str(pane_state.get("status", "")))
+                label = f"{pane['id']} {pane_display_label(pane['label'], pane['title'], pane_state)}"
                 if badge:
                     label = f"{label} {badge}"
                 rows.append(
