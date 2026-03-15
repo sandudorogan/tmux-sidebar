@@ -153,6 +153,18 @@ Shortcuts are validated on load. If any value is empty, duplicates another,
 overlaps as a prefix, or contains the reserved `q` key, all three revert to
 defaults.
 
+### Scroll offset
+
+Control how many lines of context stay visible above and below the cursor
+when navigating (like vim's `scrolloff`):
+
+```tmux
+set -g @tmux_sidebar_scrolloff 8      # default: 8
+```
+
+Set to `0` for edge-only scrolling — the viewport scrolls only when the
+cursor reaches the very top or bottom.
+
 ### Key overrides
 
 Override the default tmux keybindings for toggle and focus:
@@ -172,6 +184,7 @@ set -g @tmux_sidebar_focus_key   B    # default: T
 | `@tmux_sidebar_add_window_shortcut`  |  `aw`   | Shortcut to add a window         |
 | `@tmux_sidebar_add_session_shortcut` |  `as`   | Shortcut to add a session        |
 | `@tmux_sidebar_close_pane_shortcut`  |   `x`   | Shortcut to close selected pane  |
+| `@tmux_sidebar_scrolloff`            |   `8`   | Cursor scroll margin (like vim)  |
 | `@tmux_sidebar_toggle_key`           |   `t`   | Tmux key to toggle sidebar       |
 | `@tmux_sidebar_focus_key`            |   `T`   | Tmux key to focus sidebar        |
 

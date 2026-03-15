@@ -58,7 +58,7 @@ else:
     _EXTRA_MOUSE_MASK = getattr(curses, "REPORT_MOUSE_POSITION", 0x08000000)
     MOUSE_SCROLL_DOWN = _EXTRA_MOUSE_MASK
 MOUSE_SCROLL_LINES = 3
-SCROLL_MARGIN = 2
+DEFAULT_SCROLLOFF = 8
 
 _refresh_requested = False
 
@@ -113,6 +113,18 @@ def tmux_option(option_name: str) -> str:
         return run_tmux("show-options", "-gv", option_name).strip()
     except subprocess.CalledProcessError:
         return ""
+
+
+def configured_scrolloff() -> int:
+    raw = tmux_option("@tmux_sidebar_scrolloff")
+    if raw:
+        try:
+            value = int(raw)
+            if value >= 0:
+                return value
+        except (TypeError, ValueError):
+            pass
+    return DEFAULT_SCROLLOFF
 
 
 def configured_sidebar_width() -> int:
@@ -570,10 +582,10 @@ def find_selected_row_index(rows: list[dict], selected_pane_id: str) -> int | No
     )
 
 
-def ensure_visible(row_index: int | None, scroll_offset: int, visible_lines: int) -> int:
+def ensure_visible(row_index: int | None, scroll_offset: int, visible_lines: int, scrolloff: int = 0) -> int:
     if row_index is None or visible_lines <= 0:
         return 0
-    margin = min(SCROLL_MARGIN, max(0, (visible_lines - 1) // 2))
+    margin = min(scrolloff, max(0, (visible_lines - 1) // 2))
     if row_index < scroll_offset + margin:
         return max(0, row_index - margin)
     if row_index >= scroll_offset + visible_lines - margin:
@@ -655,6 +667,7 @@ def run_interactive(stdscr) -> None:
     rows: list[dict] = []
     pane_rows: list[dict] = []
     shortcuts = dict(DEFAULT_SHORTCUTS)
+    scrolloff = DEFAULT_SCROLLOFF
     next_refresh_at = 0.0
     scroll_offset = 0
     user_scrolled = False
@@ -668,12 +681,13 @@ def run_interactive(stdscr) -> None:
         if next_refresh_at == 0.0 or signaled or now >= next_refresh_at:
             prev_pane = selected_pane_id
             rows, pane_rows, shortcuts, selected_pane_id = load_view_state(selected_pane_id)
+            scrolloff = configured_scrolloff()
             next_refresh_at = now + REFRESH_INTERVAL_SECONDS
             if selected_pane_id != prev_pane:
                 user_scrolled = False
             if not user_scrolled:
                 sel_idx = find_selected_row_index(rows, selected_pane_id)
-                scroll_offset = ensure_visible(sel_idx, scroll_offset, curses.LINES)
+                scroll_offset = ensure_visible(sel_idx, scroll_offset, curses.LINES, scrolloff)
             max_offset = max(0, len(rows) - curses.LINES)
             scroll_offset = max(0, min(scroll_offset, max_offset))
             needs_render = True
@@ -688,7 +702,7 @@ def run_interactive(stdscr) -> None:
 
         if key == curses.KEY_RESIZE:
             sel_idx = find_selected_row_index(rows, selected_pane_id)
-            scroll_offset = ensure_visible(sel_idx, scroll_offset, curses.LINES)
+            scroll_offset = ensure_visible(sel_idx, scroll_offset, curses.LINES, scrolloff)
             needs_render = True
             continue
 
@@ -738,7 +752,7 @@ def run_interactive(stdscr) -> None:
         if selection_changed:
             user_scrolled = False
             sel_idx = find_selected_row_index(rows, selected_pane_id)
-            scroll_offset = ensure_visible(sel_idx, scroll_offset, curses.LINES)
+            scroll_offset = ensure_visible(sel_idx, scroll_offset, curses.LINES, scrolloff)
             needs_render = True
             continue
 

@@ -12,27 +12,31 @@ spec = importlib.util.spec_from_file_location("sidebar_ui", Path("scripts/sideba
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
-# --- ensure_visible with margin ---
-# Basic: row above viewport scrolls up
-assert module.ensure_visible(2, 5, 10) == 0, "should scroll to show row 2 with margin"
+# --- ensure_visible with scrolloff ---
+# No scrolloff: basic edge-only behavior
+assert module.ensure_visible(2, 5, 10, 0) == 2, "no scrolloff: scroll up to row"
+assert module.ensure_visible(15, 5, 10, 0) == 6, "no scrolloff: scroll down to row"
+assert module.ensure_visible(7, 5, 10, 0) == 5, "no scrolloff: row in view, no scroll"
 
-# Row at top margin triggers scroll
-assert module.ensure_visible(6, 5, 10) == 4, "row within top margin should scroll up"
+# With scrolloff=2
+assert module.ensure_visible(2, 5, 10, 2) == 0, "scrolloff=2: scroll up with margin"
+assert module.ensure_visible(6, 5, 10, 2) == 4, "scrolloff=2: row within top margin triggers scroll"
+assert module.ensure_visible(13, 5, 10, 2) == 6, "scrolloff=2: row within bottom margin triggers scroll"
+assert module.ensure_visible(9, 5, 10, 2) == 5, "scrolloff=2: row in middle, no scroll"
 
-# Row at bottom margin triggers scroll
-assert module.ensure_visible(13, 5, 10) == 6, "row within bottom margin should scroll down"
-
-# Row comfortably inside viewport: no scroll
-assert module.ensure_visible(9, 5, 10) == 5, "row in middle should not scroll"
+# With scrolloff=8 (default)
+assert module.ensure_visible(10, 0, 20, 8) == 0, "scrolloff=8: row in comfort zone, no scroll"
+assert module.ensure_visible(13, 0, 20, 8) == 2, "scrolloff=8: row near bottom triggers scroll"
+assert module.ensure_visible(5, 10, 20, 8) == 0, "scrolloff=8: scroll up near top"
 
 # None row_index returns 0
 assert module.ensure_visible(None, 5, 10) == 0, "None row should return 0"
 
-# Small viewport (visible_lines=3): margin is 1
-assert module.ensure_visible(0, 2, 3) == 0, "small viewport: scroll to top"
+# Small viewport (visible_lines=3, scrolloff=2): margin clamped to 1
+assert module.ensure_visible(0, 2, 3, 2) == 0, "small viewport: scroll to top"
 
-# Tiny viewport (visible_lines=1): margin is 0, basic behavior
-assert module.ensure_visible(3, 5, 1) == 3, "tiny viewport: scroll to row"
+# Tiny viewport (visible_lines=1): margin is 0
+assert module.ensure_visible(3, 5, 1, 8) == 3, "tiny viewport: scroll to row"
 
 print(json.dumps({"ensure_visible": "ok"}))
 PY
