@@ -61,7 +61,7 @@ assert_file_contains "$TEST_TMUX_DATA_DIR/commands.log" 'set-option -g @tmux_sid
 assert_file_contains "sidebar.tmux" 'bind-key t run-shell'
 assert_file_contains "sidebar.tmux" 'ensure-sidebar-pane.sh'
 assert_file_contains "sidebar.tmux" '#{d:current_file}/scripts/toggle-sidebar.sh'
-assert_file_contains "sidebar.tmux" '#{d:current_file}/scripts/clear-pane-state.sh'
+assert_file_contains "sidebar.tmux" 'on-pane-focus.sh'
 assert_file_contains "sidebar.tmux" 'bind-key T run-shell'
 assert_file_contains "sidebar.tmux" '#{d:current_file}/scripts/focus-sidebar.sh'
 assert_file_contains "sidebar.tmux" 'apply-key-overrides.sh'

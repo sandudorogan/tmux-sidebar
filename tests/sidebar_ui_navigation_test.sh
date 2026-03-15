@@ -176,9 +176,9 @@ PY
 )"
 
 assert_contains "$output" '"close_calls": 1'
-assert_contains "$output" '▶ pane two'
-assert_file_contains "$TEST_TMUX_DATA_DIR/commands.log" 'kill-pane -t %2'
-assert_file_not_contains "$TEST_TMUX_DATA_DIR/commands.log" 'kill-pane -t %1'
+assert_contains "$output" '▶ pane one'
+assert_file_contains "$TEST_TMUX_DATA_DIR/commands.log" 'kill-pane -t %1'
+assert_file_not_contains "$TEST_TMUX_DATA_DIR/commands.log" 'kill-pane -t %2'
 
 fake_tmux_no_sidebar
 fake_tmux_set_tree <<'EOF'

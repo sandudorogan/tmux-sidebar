@@ -3,8 +3,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/lib.sh"
-refresh_helper="${TMUX_SIDEBAR_REFRESH_HELPER:-$SCRIPT_DIR/refresh-sidebar.sh}"
-
 pane_id=""
 app=""
 status=""
@@ -96,4 +94,4 @@ printf '"message":"%s",' "$(json_escape "$message")" >> "$tmp_file"
 printf '"updated_at":%s' "$updated_at" >> "$tmp_file"
 printf '}\n' >> "$tmp_file"
 mv "$tmp_file" "$state_file"
-"$refresh_helper" >/dev/null 2>&1 || true
+signal_sidebar_refresh

@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import curses
 import json
 import os
 import re
+import signal
 import shlex
 import subprocess
 import time
@@ -46,8 +48,43 @@ NON_AGENT_COMMANDS = {
 }
 SIDEBAR_TITLES = {"Sidebar", "tmux-sidebar"}
 INPUT_POLL_MS = 25
-REFRESH_INTERVAL_SECONDS = 0.25
+REFRESH_INTERVAL_SECONDS = 2.0
+SHORTCUTS_CACHE_TTL_SECONDS = 30.0
 ESC_DELAY_MS = 25
+
+_refresh_requested = False
+
+
+def _handle_sigusr1(signum: int, frame: object) -> None:
+    global _refresh_requested
+    _refresh_requested = True
+
+
+def _pid_file_path() -> Path | None:
+    pane = os.environ.get("TMUX_PANE", "")
+    if not pane:
+        return None
+    return STATE_DIR / f"sidebar-{pane}.pid"
+
+
+def _write_pid_file() -> None:
+    pid_path = _pid_file_path()
+    if pid_path is None:
+        return
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = pid_path.with_suffix(".tmp")
+    tmp.write_text(str(os.getpid()))
+    tmp.rename(pid_path)
+
+
+def _remove_pid_file() -> None:
+    pid_path = _pid_file_path()
+    if pid_path is None:
+        return
+    try:
+        pid_path.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def run_tmux(*args: str) -> str:
@@ -467,10 +504,24 @@ def reconcile_selected_pane(selected_pane_id: str, pane_rows: list[dict]) -> str
     return selected_pane_id
 
 
+_cached_shortcuts: dict[str, str] | None = None
+_cached_shortcuts_at: float = 0.0
+
+
+def cached_configured_shortcuts() -> dict[str, str]:
+    global _cached_shortcuts, _cached_shortcuts_at
+    now = time.monotonic()
+    if _cached_shortcuts is not None and now - _cached_shortcuts_at < SHORTCUTS_CACHE_TTL_SECONDS:
+        return _cached_shortcuts
+    _cached_shortcuts = configured_shortcuts()
+    _cached_shortcuts_at = now
+    return _cached_shortcuts
+
+
 def load_view_state(selected_pane_id: str) -> tuple[list[dict], list[dict], dict[str, str], str]:
     rows = load_tree()
     pane_rows = pane_rows_for(rows)
-    shortcuts = configured_shortcuts()
+    shortcuts = cached_configured_shortcuts()
     if not sidebar_has_focus():
         selected_pane_id = tmux_option("@tmux_sidebar_main_pane") or selected_pane_id
     return rows, pane_rows, shortcuts, reconcile_selected_pane(selected_pane_id, pane_rows)
@@ -530,13 +581,19 @@ def process_keypress(
 
 
 def run_interactive(stdscr) -> None:
+    global _refresh_requested
+
+    signal.signal(signal.SIGUSR1, _handle_sigusr1)
+    _write_pid_file()
+    atexit.register(_remove_pid_file)
+
     curses.curs_set(0)
     if hasattr(curses, "set_escdelay"):
         curses.set_escdelay(ESC_DELAY_MS)
     stdscr.keypad(True)
     stdscr.timeout(INPUT_POLL_MS)
 
-    selected_pane_id = ""
+    selected_pane_id = tmux_option("@tmux_sidebar_main_pane")
     pending_key = ""
     rows: list[dict] = []
     pane_rows: list[dict] = []
@@ -546,7 +603,10 @@ def run_interactive(stdscr) -> None:
 
     while True:
         now = time.monotonic()
-        if next_refresh_at == 0.0 or now >= next_refresh_at:
+        signaled = _refresh_requested
+        if signaled:
+            _refresh_requested = False
+        if next_refresh_at == 0.0 or signaled or now >= next_refresh_at:
             rows, pane_rows, shortcuts, selected_pane_id = load_view_state(selected_pane_id)
             next_refresh_at = now + REFRESH_INTERVAL_SECONDS
             needs_render = True

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+enabled="$(tmux show-options -gv @tmux_sidebar_enabled 2>/dev/null || printf '0\n')"
+[ "$enabled" = "1" ] || exit 0
+
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/lib.sh"
 sidebar_titles="$(sidebar_title_pattern)"
 target_pane="${1:-}"
 current_window="${2:-}"
-
-enabled="$(tmux show-options -gv @tmux_sidebar_enabled 2>/dev/null || printf '0\n')"
-[ "$enabled" = "1" ] || exit 0
 
 if [ -z "$target_pane" ] && [ -z "$current_window" ]; then
   target_pane="$(tmux display-message -p '#{pane_id}' 2>/dev/null || true)"

@@ -3,8 +3,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/lib.sh"
-refresh_helper="${TMUX_SIDEBAR_REFRESH_HELPER:-$SCRIPT_DIR/refresh-sidebar.sh}"
-
 pane_id="${1:-}"
 [ -n "$pane_id" ] || exit 0
 [[ "$pane_id" =~ ^%[0-9]+$ ]] || exit 0
@@ -20,6 +18,6 @@ case "$app:$status" in
     tmp_file="$(mktemp "$state_dir/.pane-state.XXXXXX")"
     sed 's/"status":"[^"]*"/"status":"idle"/' "$state_file" > "$tmp_file"
     mv "$tmp_file" "$state_file"
-    "$refresh_helper" >/dev/null 2>&1 || true
+    signal_sidebar_refresh
     ;;
 esac

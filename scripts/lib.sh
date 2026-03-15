@@ -192,6 +192,17 @@ restore_sidebar_window_snapshot_if_unchanged() {
   clear_sidebar_window_snapshot "$window_id"
 }
 
+signal_sidebar_refresh() {
+  local state_dir pid_file pid
+  state_dir="$(print_state_dir)"
+  for pid_file in "$state_dir"/sidebar-*.pid; do
+    [ -e "$pid_file" ] || continue
+    pid="$(cat "$pid_file" 2>/dev/null || true)"
+    [ -n "$pid" ] || continue
+    kill -USR1 "$pid" 2>/dev/null || true
+  done
+}
+
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   "$@"
 fi
