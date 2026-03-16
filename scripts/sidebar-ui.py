@@ -99,13 +99,38 @@ def run_tmux(*args: str) -> str:
     return subprocess.check_output(["tmux", *args], text=True, stderr=subprocess.DEVNULL)
 
 
+DEFAULT_BADGES: dict[str, str] = {
+    "running": "⏳",
+    "needs-input": "\U000f0351",  # 󰌑
+    "done": "\U000f012c",  # 󰄬
+    "error": "\U000f068c",  # 󰚌
+}
+
+_badge_cache: dict[str, str] | None = None
+
+BADGE_OPTIONS: dict[str, str] = {
+    "running": "@tmux_sidebar_badge_running",
+    "needs-input": "@tmux_sidebar_badge_needs_input",
+    "done": "@tmux_sidebar_badge_done",
+    "error": "@tmux_sidebar_badge_error",
+}
+
+
+def configured_badges() -> dict[str, str]:
+    global _badge_cache
+    if _badge_cache is not None:
+        return _badge_cache
+    badges = dict(DEFAULT_BADGES)
+    for status, option in BADGE_OPTIONS.items():
+        custom = tmux_option(option)
+        if custom:
+            badges[status] = custom
+    _badge_cache = badges
+    return badges
+
+
 def badge_for_status(status: str) -> str:
-    return {
-        "needs-input": "[?]",
-        "done": "[!]",
-        "error": "[x]",
-        "running": "[~]",
-    }.get(status, "")
+    return configured_badges().get(status, "")
 
 
 def tmux_option(option_name: str) -> str:
@@ -572,6 +597,29 @@ def reconcile_selected_pane(selected_pane_id: str, pane_rows: list[dict]) -> str
     return pane_rows[0]["pane_id"]
 
 
+def find_search_matches(rows: list[dict], query: str) -> set[int]:
+    if not query:
+        return set()
+    query_lower = query.lower()
+    return {i for i, row in enumerate(rows) if query_lower in row["text"].lower()}
+
+
+def next_search_match(rows: list[dict], selected_pane_id: str, search_matches: set[int], direction: int = 1) -> str:
+    matching = [(i, rows[i]["pane_id"]) for i in sorted(search_matches) if "pane_id" in rows[i]]
+    if not matching:
+        return selected_pane_id
+    current_row_idx = next((i for i, row in enumerate(rows) if row.get("pane_id") == selected_pane_id), -1)
+    if direction == 1:
+        for row_idx, pane_id in matching:
+            if row_idx > current_row_idx:
+                return pane_id
+        return matching[0][1]
+    for row_idx, pane_id in reversed(matching):
+        if row_idx < current_row_idx:
+            return pane_id
+    return matching[-1][1]
+
+
 _cached_shortcuts: dict[str, str] | None = None
 _cached_shortcuts_at: float = 0.0
 
@@ -613,15 +661,44 @@ def ensure_visible(row_index: int | None, scroll_offset: int, visible_lines: int
     return scroll_offset
 
 
-def render_screen(stdscr, rows: list[dict], selected_pane_id: str, scroll_offset: int = 0) -> None:
+def render_screen(stdscr, rows: list[dict], selected_pane_id: str, scroll_offset: int = 0,
+                  search_query: str = "", search_matches: set[int] | None = None,
+                  search_mode: bool = False) -> None:
     width = max(0, curses.COLS - 1)
+    has_search_bar = search_mode or bool(search_query)
+    visible_lines = curses.LINES - (1 if has_search_bar else 0)
     stdscr.erase()
     rendered = render_rows(rows, selected_pane_id, width)
-    visible = rendered[scroll_offset:scroll_offset + curses.LINES]
+    selected_row = find_selected_row_index(rows, selected_pane_id)
+    match_attr = getattr(curses, "A_ITALIC", curses.A_UNDERLINE)
+    visible = rendered[scroll_offset:scroll_offset + visible_lines]
     for y, line in enumerate(visible):
-        if y >= curses.LINES:
+        if y >= visible_lines:
             break
-        stdscr.addnstr(y, 0, line, width)
+        row_idx = y + scroll_offset
+        is_selected = selected_row is not None and row_idx == selected_row
+        is_match = bool(search_matches) and row_idx in search_matches
+        if is_selected:
+            attr = curses.A_BOLD
+            if is_match:
+                attr |= match_attr
+            stdscr.addnstr(y, 0, line, width, attr)
+        elif is_match:
+            stdscr.addnstr(y, 0, line, width, match_attr)
+        else:
+            stdscr.addnstr(y, 0, line, width)
+    if has_search_bar:
+        prompt = f"/{search_query}"
+        prompt_line = curses.LINES - 1
+        stdscr.addnstr(prompt_line, 0, truncate_line(prompt, width), width,
+                       0 if search_mode else curses.A_DIM)
+        if search_mode:
+            curses.curs_set(1)
+            stdscr.move(prompt_line, min(len(prompt), width - 1))
+        else:
+            curses.curs_set(0)
+    else:
+        curses.curs_set(0)
     stdscr.refresh()
 
 
@@ -676,6 +753,11 @@ def run_interactive(stdscr) -> None:
     atexit.register(_remove_pid_file)
 
     curses.curs_set(0)
+    try:
+        curses.start_color()
+        curses.use_default_colors()
+    except curses.error:
+        pass
     if hasattr(curses, "set_escdelay"):
         curses.set_escdelay(ESC_DELAY_MS)
     stdscr.keypad(True)
@@ -692,6 +774,9 @@ def run_interactive(stdscr) -> None:
     scroll_offset = 0
     user_scrolled = False
     needs_render = True
+    search_mode = False
+    search_query = ""
+    search_matches: set[int] = set()
 
     while True:
         now = time.monotonic()
@@ -705,15 +790,19 @@ def run_interactive(stdscr) -> None:
             next_refresh_at = now + REFRESH_INTERVAL_SECONDS
             if selected_pane_id != prev_pane:
                 user_scrolled = False
+            if search_query:
+                search_matches = find_search_matches(rows, search_query)
+            _vis = curses.LINES - (1 if search_mode or search_query else 0)
             if not user_scrolled:
                 sel_idx = find_selected_row_index(rows, selected_pane_id)
-                scroll_offset = ensure_visible(sel_idx, scroll_offset, curses.LINES, scrolloff)
-            max_offset = max(0, len(rows) - curses.LINES)
+                scroll_offset = ensure_visible(sel_idx, scroll_offset, _vis, scrolloff)
+            max_offset = max(0, len(rows) - _vis)
             scroll_offset = max(0, min(scroll_offset, max_offset))
             needs_render = True
 
         if needs_render:
-            render_screen(stdscr, rows, selected_pane_id, scroll_offset)
+            render_screen(stdscr, rows, selected_pane_id, scroll_offset,
+                          search_query, search_matches, search_mode)
             needs_render = False
 
         key = stdscr.getch()
@@ -722,7 +811,8 @@ def run_interactive(stdscr) -> None:
 
         if key == curses.KEY_RESIZE:
             sel_idx = find_selected_row_index(rows, selected_pane_id)
-            scroll_offset = ensure_visible(sel_idx, scroll_offset, curses.LINES, scrolloff)
+            _vis = curses.LINES - (1 if search_mode or search_query else 0)
+            scroll_offset = ensure_visible(sel_idx, scroll_offset, _vis, scrolloff)
             needs_render = True
             continue
 
@@ -737,7 +827,7 @@ def run_interactive(stdscr) -> None:
                 needs_render = True
                 continue
             if bstate & MOUSE_SCROLL_DOWN:
-                max_offset = max(0, len(rows) - curses.LINES)
+                max_offset = max(0, len(rows) - (curses.LINES - (1 if search_mode or search_query else 0)))
                 scroll_offset = min(max_offset, scroll_offset + MOUSE_SCROLL_LINES)
                 user_scrolled = True
                 needs_render = True
@@ -762,6 +852,67 @@ def run_interactive(stdscr) -> None:
                         next_refresh_at = 0.0
                 continue
 
+        if search_mode:
+            if key == 27:
+                search_mode = False
+                search_query = ""
+                search_matches = set()
+                sel_idx = find_selected_row_index(rows, selected_pane_id)
+                scroll_offset = ensure_visible(sel_idx, scroll_offset, curses.LINES, scrolloff)
+            elif key in (10, 13):
+                search_mode = False
+            elif key in (curses.KEY_BACKSPACE, 127, 8):
+                if search_query:
+                    search_query = search_query[:-1]
+                search_matches = find_search_matches(rows, search_query)
+                sel_idx = find_selected_row_index(rows, selected_pane_id)
+                if search_matches and (sel_idx is None or sel_idx not in search_matches):
+                    selected_pane_id = next_search_match(rows, selected_pane_id, search_matches, 1)
+                user_scrolled = False
+                sel_idx = find_selected_row_index(rows, selected_pane_id)
+                scroll_offset = ensure_visible(sel_idx, scroll_offset, curses.LINES - 1, scrolloff)
+            elif 32 <= key <= 126:
+                search_query += chr(key)
+                search_matches = find_search_matches(rows, search_query)
+                sel_idx = find_selected_row_index(rows, selected_pane_id)
+                if search_matches and (sel_idx is None or sel_idx not in search_matches):
+                    selected_pane_id = next_search_match(rows, selected_pane_id, search_matches, 1)
+                user_scrolled = False
+                sel_idx = find_selected_row_index(rows, selected_pane_id)
+                scroll_offset = ensure_visible(sel_idx, scroll_offset, curses.LINES - 1, scrolloff)
+            needs_render = True
+            continue
+
+        if not pending_key and key == ord("/"):
+            search_mode = True
+            search_query = ""
+            search_matches = set()
+            needs_render = True
+            continue
+
+        if not pending_key and search_query:
+            if key == ord("n"):
+                selected_pane_id = next_search_match(rows, selected_pane_id, search_matches, 1)
+                user_scrolled = False
+                sel_idx = find_selected_row_index(rows, selected_pane_id)
+                scroll_offset = ensure_visible(sel_idx, scroll_offset, curses.LINES - 1, scrolloff)
+                needs_render = True
+                continue
+            if key == ord("N"):
+                selected_pane_id = next_search_match(rows, selected_pane_id, search_matches, -1)
+                user_scrolled = False
+                sel_idx = find_selected_row_index(rows, selected_pane_id)
+                scroll_offset = ensure_visible(sel_idx, scroll_offset, curses.LINES - 1, scrolloff)
+                needs_render = True
+                continue
+            if key == 27:
+                search_query = ""
+                search_matches = set()
+                sel_idx = find_selected_row_index(rows, selected_pane_id)
+                scroll_offset = ensure_visible(sel_idx, scroll_offset, curses.LINES, scrolloff)
+                needs_render = True
+                continue
+
         pending_key, selected_pane_id, action, selection_changed = process_keypress(
             key,
             selected_pane_id,
@@ -772,7 +923,8 @@ def run_interactive(stdscr) -> None:
         if selection_changed:
             user_scrolled = False
             sel_idx = find_selected_row_index(rows, selected_pane_id)
-            scroll_offset = ensure_visible(sel_idx, scroll_offset, curses.LINES, scrolloff)
+            _vis = curses.LINES - (1 if search_query else 0)
+            scroll_offset = ensure_visible(sel_idx, scroll_offset, _vis, scrolloff)
             needs_render = True
             continue
 

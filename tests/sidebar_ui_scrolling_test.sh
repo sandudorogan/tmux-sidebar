@@ -98,7 +98,7 @@ class FakeScreen:
     def erase(self):
         self.lines = {}
 
-    def addnstr(self, y, x, text, limit):
+    def addnstr(self, y, x, text, limit, attr=0):
         self.lines[y] = text[:limit]
 
     def refresh(self):
@@ -210,7 +210,7 @@ class FakeScreen:
     def erase(self):
         self.lines = {}
 
-    def addnstr(self, y, x, text, limit):
+    def addnstr(self, y, x, text, limit, attr=0):
         self.lines[y] = text[:limit]
 
     def refresh(self):

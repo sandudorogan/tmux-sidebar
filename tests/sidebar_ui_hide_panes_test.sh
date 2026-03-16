@@ -56,7 +56,7 @@ assert_contains "$output" '"session"'
 assert_contains "$output" '"window"'
 
 # The visible pane should show a badge
-assert_contains "$output" '[~]'
+assert_contains "$output" '⏳'
 
 # Now test with hide_panes off — all panes should appear
 printf 'off\n' > "$TEST_TMUX_DATA_DIR/option__tmux_sidebar_hide_panes.txt"
@@ -199,7 +199,7 @@ class FakeScreen:
     def erase(self):
         self.lines = {}
 
-    def addnstr(self, y, x, text, limit):
+    def addnstr(self, y, x, text, limit, attr=0):
         self.lines[y] = text[:limit]
 
     def refresh(self):
@@ -293,7 +293,7 @@ class FakeScreen:
     def keypad(self, enabled): pass
     def timeout(self, milliseconds): pass
     def erase(self): self.lines = {}
-    def addnstr(self, y, x, text, limit): self.lines[y] = text[:limit]
+    def addnstr(self, y, x, text, limit, attr=0): self.lines[y] = text[:limit]
     def refresh(self):
         self.frames.append([self.lines.get(i, "") for i in range(module.curses.LINES)])
     def getch(self):
@@ -368,7 +368,7 @@ class FakeScreen:
     def keypad(self, enabled): pass
     def timeout(self, milliseconds): pass
     def erase(self): self.lines = {}
-    def addnstr(self, y, x, text, limit): self.lines[y] = text[:limit]
+    def addnstr(self, y, x, text, limit, attr=0): self.lines[y] = text[:limit]
     def refresh(self):
         self.frames.append([self.lines.get(i, "") for i in range(module.curses.LINES)])
     def getch(self):
