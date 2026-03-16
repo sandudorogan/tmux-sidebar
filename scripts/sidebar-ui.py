@@ -59,8 +59,8 @@ else:
     MOUSE_SCROLL_DOWN = _EXTRA_MOUSE_MASK
 MOUSE_SCROLL_LINES = 3
 DEFAULT_SCROLLOFF = 8
-COLOR_PAIR_ACTIVE = 1
-COLOR_PAIR_SESSION = 2
+COLOR_PAIR_SESSION = 1
+COLOR_PAIR_WINDOW = 2
 COLOR_PAIR_PANE = 3
 _HEX_COLOR_RE = re.compile(r"#([0-9a-fA-F]{6})")
 
@@ -244,36 +244,37 @@ def _parse_border_format_colors() -> dict[str, str]:
 DEFAULT_COLOR_FG = "ffffff"
 
 
-def init_sidebar_colors() -> tuple[int, int, int]:
+def init_sidebar_colors() -> tuple[int, int, int, int]:
     try:
         if curses.COLORS < 256:
-            return curses.A_BOLD, 0, 0
+            return curses.A_BOLD, 0, 0, 0
     except AttributeError:
-        return curses.A_BOLD, 0, 0
+        return curses.A_BOLD, 0, 0, 0
     fmt_colors = _parse_border_format_colors()
-    active_hex = (
-        _option_hex("@tmux_sidebar_color_active")
+    session_hex = (
+        _option_hex("@tmux_sidebar_color_session")
         or parse_fg_hex(tmux_option("pane-active-border-style"))
         or DEFAULT_COLOR_FG
     )
-    session_hex = (
-        _option_hex("@tmux_sidebar_color_session")
-        or fmt_colors.get("active_path", "")
-        or parse_fg_hex(tmux_option("status-style"))
+    window_hex = (
+        _option_hex("@tmux_sidebar_color_window")
+        or fmt_colors.get("inactive_command", "")
+        or parse_fg_hex(tmux_option("pane-border-style"))
         or DEFAULT_COLOR_FG
     )
     pane_hex = (
         _option_hex("@tmux_sidebar_color_pane")
-        or fmt_colors.get("inactive_command", "")
-        or parse_fg_hex(tmux_option("window-status-style"))
+        or fmt_colors.get("active_path", "")
+        or parse_fg_hex(tmux_option("status-style"))
         or DEFAULT_COLOR_FG
     )
-    curses.init_pair(COLOR_PAIR_ACTIVE, _define_color(240, active_hex), -1)
-    curses.init_pair(COLOR_PAIR_SESSION, _define_color(241, session_hex), -1)
+    curses.init_pair(COLOR_PAIR_SESSION, _define_color(240, session_hex), -1)
+    curses.init_pair(COLOR_PAIR_WINDOW, _define_color(241, window_hex), -1)
     curses.init_pair(COLOR_PAIR_PANE, _define_color(242, pane_hex), -1)
     return (
-        curses.color_pair(COLOR_PAIR_ACTIVE) | curses.A_BOLD,
+        curses.A_BOLD,
         curses.color_pair(COLOR_PAIR_SESSION),
+        curses.color_pair(COLOR_PAIR_WINDOW),
         curses.color_pair(COLOR_PAIR_PANE),
     )
 
@@ -831,7 +832,8 @@ def render_screen(stdscr, rows: list[dict], selected_pane_id: str, scroll_offset
                   search_query: str = "", search_matches: set[int] | None = None,
                   search_mode: bool = False,
                   active_attr: int = curses.A_BOLD,
-                  session_attr: int = 0, pane_attr: int = 0) -> None:
+                  session_attr: int = 0, window_attr: int = 0,
+                  pane_attr: int = 0) -> None:
     width = max(0, curses.COLS - 1)
     has_search_bar = search_mode or bool(search_query)
     visible_lines = curses.LINES - (1 if has_search_bar else 0)
@@ -857,6 +859,8 @@ def render_screen(stdscr, rows: list[dict], selected_pane_id: str, scroll_offset
                 attr = active_attr | (match_attr if is_match else 0)
             elif kind == "session":
                 attr = session_attr | (match_attr if is_match else 0)
+            elif kind == "window":
+                attr = window_attr | (match_attr if is_match else 0)
             else:
                 attr = pane_attr | (match_attr if is_match else 0)
             stdscr.addnstr(y, lstart, label, remaining, attr)
@@ -931,9 +935,9 @@ def run_interactive(stdscr) -> None:
     try:
         curses.start_color()
         curses.use_default_colors()
-        active_attr, session_attr, pane_attr = init_sidebar_colors()
+        active_attr, session_attr, window_attr, pane_attr = init_sidebar_colors()
     except curses.error:
-        active_attr, session_attr, pane_attr = curses.A_BOLD, 0, 0
+        active_attr, session_attr, window_attr, pane_attr = curses.A_BOLD, 0, 0, 0
     if hasattr(curses, "set_escdelay"):
         curses.set_escdelay(ESC_DELAY_MS)
     stdscr.keypad(True)
@@ -979,7 +983,7 @@ def run_interactive(stdscr) -> None:
         if needs_render:
             render_screen(stdscr, rows, selected_pane_id, scroll_offset,
                           search_query, search_matches, search_mode,
-                          active_attr, session_attr, pane_attr)
+                          active_attr, session_attr, window_attr, pane_attr)
             _write_row_map(rows, scroll_offset)  # update IPC file for context menu
             needs_render = False
 
