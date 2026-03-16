@@ -60,6 +60,8 @@ else:
 MOUSE_SCROLL_LINES = 3
 DEFAULT_SCROLLOFF = 8
 COLOR_PAIR_ACTIVE = 1
+COLOR_PAIR_SESSION = 2
+COLOR_PAIR_PANE = 3
 _HEX_COLOR_RE = re.compile(r"#([0-9a-fA-F]{6})")
 
 _refresh_requested = False
@@ -158,33 +160,59 @@ def hex_to_256(hex_color: str) -> int:
     return 16 + 36 * ri + 6 * gi + bi
 
 
-def _resolve_hex(option: str, fallback_style: str) -> str:
+def _option_hex(option: str) -> str:
     raw = tmux_option(option)
     if raw:
         m = _HEX_COLOR_RE.search(raw)
         return m.group(1) if m else ""
-    return parse_fg_hex(tmux_option(fallback_style))
+    return ""
 
 
-def init_sidebar_colors() -> bool:
+def _define_color(slot: int, hex_color: str) -> int:
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
+    if curses.can_change_color():
+        curses.init_color(slot, r * 1000 // 255, g * 1000 // 255, b * 1000 // 255)
+        return slot
+    return hex_to_256(hex_color)
+
+
+def _parse_border_format_colors() -> dict[str, str]:
+    fmt = tmux_option("pane-border-format")
+    colors: dict[str, str] = {}
+    pattern = r"#\{\?pane_active,#\[fg=#([0-9a-fA-F]{6})\],#\[fg=#([0-9a-fA-F]{6})\]\}"
+    matches = list(re.finditer(pattern, fmt))
+    if matches:
+        colors["inactive_command"] = matches[0].group(2)
+    if len(matches) > 1:
+        colors["active_path"] = matches[1].group(1)
+    return colors
+
+
+def init_sidebar_colors() -> tuple[int, int, int]:
     try:
         if curses.COLORS < 256:
-            return False
+            return curses.A_BOLD, 0, 0
     except AttributeError:
-        return False
-    active_hex = _resolve_hex("@tmux_sidebar_color_active", "pane-active-border-style")
-    if not active_hex:
-        return False
-    ar = int(active_hex[0:2], 16)
-    ag = int(active_hex[2:4], 16)
-    ab = int(active_hex[4:6], 16)
-    if curses.can_change_color():
-        curses.init_color(240, ar * 1000 // 255, ag * 1000 // 255, ab * 1000 // 255)
-        curses.init_color(241, ar * 300 // 255, ag * 300 // 255, ab * 300 // 255)
-        curses.init_pair(COLOR_PAIR_ACTIVE, 240, 241)
-    else:
-        curses.init_pair(COLOR_PAIR_ACTIVE, hex_to_256(active_hex), -1)
-    return True
+        return curses.A_BOLD, 0, 0
+    active_hex = _option_hex("@tmux_sidebar_color_active") or parse_fg_hex(tmux_option("pane-active-border-style"))
+    fmt_colors = _parse_border_format_colors()
+    session_hex = _option_hex("@tmux_sidebar_color_session") or fmt_colors.get("active_path", "")
+    pane_hex = _option_hex("@tmux_sidebar_color_pane") or parse_fg_hex(tmux_option("window-status-style")) or "a9b1d6"
+    active_attr = curses.A_BOLD
+    session_attr = 0
+    pane_attr = 0
+    if active_hex:
+        curses.init_pair(COLOR_PAIR_ACTIVE, _define_color(240, active_hex), -1)
+        active_attr = curses.color_pair(COLOR_PAIR_ACTIVE) | curses.A_BOLD
+    if session_hex:
+        curses.init_pair(COLOR_PAIR_SESSION, _define_color(241, session_hex), -1)
+        session_attr = curses.color_pair(COLOR_PAIR_SESSION)
+    if pane_hex:
+        curses.init_pair(COLOR_PAIR_PANE, _define_color(242, pane_hex), -1)
+        pane_attr = curses.color_pair(COLOR_PAIR_PANE)
+    return active_attr, session_attr, pane_attr
 
 
 def configured_scrolloff() -> int:
@@ -731,10 +759,16 @@ def ensure_visible(row_index: int | None, scroll_offset: int, visible_lines: int
     return scroll_offset
 
 
+def _label_start(line: str) -> int:
+    pos = line.rfind("─ ")
+    return pos + 2 if pos >= 0 else len(line)
+
+
 def render_screen(stdscr, rows: list[dict], selected_pane_id: str, scroll_offset: int = 0,
                   search_query: str = "", search_matches: set[int] | None = None,
                   search_mode: bool = False,
-                  active_attr: int = curses.A_BOLD, inactive_attr: int = 0) -> None:
+                  active_attr: int = curses.A_BOLD,
+                  session_attr: int = 0, pane_attr: int = 0) -> None:
     width = max(0, curses.COLS - 1)
     has_search_bar = search_mode or bool(search_query)
     visible_lines = curses.LINES - (1 if has_search_bar else 0)
@@ -747,18 +781,22 @@ def render_screen(stdscr, rows: list[dict], selected_pane_id: str, scroll_offset
         if y >= visible_lines:
             break
         row_idx = y + scroll_offset
+        row = rows[row_idx] if row_idx < len(rows) else None
+        kind = row["kind"] if row else None
         is_selected = selected_row is not None and row_idx == selected_row
         is_match = bool(search_matches) and row_idx in search_matches
-        if is_selected:
-            attr = active_attr
-            if is_match:
-                attr |= match_attr
-            padded = line.ljust(width)[:width]
-            stdscr.addnstr(y, 0, padded, width, attr)
-        elif is_match:
-            stdscr.addnstr(y, 0, line, width, inactive_attr | match_attr)
-        else:
-            stdscr.addnstr(y, 0, line, width, inactive_attr)
+        lstart = _label_start(line)
+        stdscr.addnstr(y, 0, line[:lstart], width)
+        remaining = width - lstart
+        if remaining > 0 and lstart < len(line):
+            label = line[lstart:]
+            if is_selected:
+                attr = active_attr | (match_attr if is_match else 0)
+            elif kind == "session":
+                attr = session_attr | (match_attr if is_match else 0)
+            else:
+                attr = pane_attr | (match_attr if is_match else 0)
+            stdscr.addnstr(y, lstart, label, remaining, attr)
     if has_search_bar:
         prompt = f"/{search_query}"
         prompt_line = curses.LINES - 1
@@ -825,21 +863,17 @@ def run_interactive(stdscr) -> None:
     atexit.register(_remove_pid_file)
 
     curses.curs_set(0)
-    has_colors = False
     try:
         curses.start_color()
         curses.use_default_colors()
-        has_colors = init_sidebar_colors()
+        active_attr, session_attr, pane_attr = init_sidebar_colors()
     except curses.error:
-        pass
+        active_attr, session_attr, pane_attr = curses.A_BOLD, 0, 0
     if hasattr(curses, "set_escdelay"):
         curses.set_escdelay(ESC_DELAY_MS)
     stdscr.keypad(True)
     stdscr.timeout(INPUT_POLL_MS)
     curses.mousemask(curses.ALL_MOUSE_EVENTS | _EXTRA_MOUSE_MASK)
-
-    active_attr = curses.color_pair(COLOR_PAIR_ACTIVE) | curses.A_BOLD if has_colors else curses.A_BOLD
-    inactive_attr = 0
 
     selected_pane_id = tmux_option("@tmux_sidebar_main_pane")
     pending_key = ""
@@ -880,7 +914,7 @@ def run_interactive(stdscr) -> None:
         if needs_render:
             render_screen(stdscr, rows, selected_pane_id, scroll_offset,
                           search_query, search_matches, search_mode,
-                          active_attr, inactive_attr)
+                          active_attr, session_attr, pane_attr)
             needs_render = False
 
         key = stdscr.getch()
