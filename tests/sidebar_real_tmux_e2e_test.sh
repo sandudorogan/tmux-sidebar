@@ -15,7 +15,7 @@ real_tmux set-option -g @tmux_sidebar_focus_on_open 0
 main_window_id="$(real_tmux display-message -p -t work:editor '#{window_id}')"
 main_pane_id="$(real_tmux display-message -p -t work:editor '#{pane_id}')"
 real_tmux set-option -g @tmux_sidebar_main_pane "$main_pane_id"
-real_tmux run-shell -b "$REPO_ROOT/scripts/features/sidebar/ensure-sidebar-pane.sh $main_pane_id $main_window_id"
+real_tmux run-shell "$REPO_ROOT/scripts/features/sidebar/ensure-sidebar-pane.sh $main_pane_id $main_window_id"
 
 sidebar_pane_id="$(real_tmux_wait_for_sidebar_pane "$main_window_id")"
 capture="$(real_tmux_wait_for_capture "$sidebar_pane_id" 'work')"
