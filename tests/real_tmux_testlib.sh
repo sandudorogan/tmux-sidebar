@@ -35,6 +35,53 @@ real_tmux() {
   tmux -S "$REAL_TMUX_SOCKET_PATH" -f /dev/null "$@"
 }
 
+real_tmux_shell_command() {
+  local shell_command=""
+  printf -v shell_command '%q ' "$@"
+  printf '%s\n' "${shell_command% }"
+}
+
+real_tmux_run_shell_capture() {
+  local shell_command=""
+  local token="$$.$RANDOM"
+  local output_file="$TEST_TMP/run-shell-output.$token"
+  local status_file="$TEST_TMP/run-shell-status.$token"
+  local wrapped_command=""
+  local attempts=100
+  local status=""
+  local output=""
+  local _attempt
+
+  shell_command="$(real_tmux_shell_command "$@")"
+  printf -v wrapped_command 'bash -lc %q' \
+    "($shell_command) > \"$output_file\" 2>&1; printf '%s\n' \"\$?\" > \"$status_file\""
+  real_tmux run-shell -b "$wrapped_command"
+
+  for _attempt in $(seq 1 "$attempts"); do
+    if [ -f "$status_file" ]; then
+      status="$(tr -d '\n' < "$status_file")"
+      if [ -f "$output_file" ]; then
+        output="$(<"$output_file")"
+      fi
+      rm -f "$output_file" "$status_file"
+      if [ "$status" = "0" ]; then
+        printf '%s\n' "$output"
+        return 0
+      fi
+      printf '%s\n' "$output"
+      fail "run-shell command failed with status [$status]: [$shell_command]"
+    fi
+    sleep 0.05
+  done
+
+  if [ -f "$output_file" ]; then
+    output="$(<"$output_file")"
+  fi
+  rm -f "$output_file" "$status_file"
+  printf '%s\n' "$output"
+  fail "run-shell command did not finish: [$shell_command]"
+}
+
 real_tmux_start_server() {
   mkdir -p "$REAL_TMUX_STATE_DIR"
   real_tmux new-session -d -s work -n editor
