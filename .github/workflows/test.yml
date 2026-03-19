@@ -16,4 +16,4 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y tmux
 
       - name: Run tests
-        run: bash tests/run.sh tests/*_test.sh
+        run: bash tests/run.sh
