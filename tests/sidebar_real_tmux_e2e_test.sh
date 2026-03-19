@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export PS4='+${LINENO}: '
+set -x
 
 . "$(dirname "$0")/real_tmux_testlib.sh"
 
