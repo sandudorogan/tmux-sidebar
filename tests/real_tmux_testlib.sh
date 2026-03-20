@@ -41,6 +41,45 @@ real_tmux_shell_command() {
   printf '%s\n' "${shell_command% }"
 }
 
+real_tmux_script_platform() {
+  printf '%s\n' "${REAL_TMUX_SCRIPT_PLATFORM:-$(uname -s)}"
+}
+
+real_tmux_script_command() {
+  local log_file="$1"
+  shift
+  local script_platform=""
+  local shell_command=""
+
+  script_platform="$(real_tmux_script_platform)"
+  case "$script_platform" in
+    Darwin)
+      printf -v shell_command '%q ' script -q "$log_file" "$@"
+      ;;
+    *)
+      printf -v shell_command '%q ' script -q "$log_file" -- "$@"
+      ;;
+  esac
+  printf '%s\n' "${shell_command% }"
+}
+
+real_tmux_attach_session_client() {
+  local session_name="$1"
+  local log_file="$2"
+  local script_platform=""
+
+  script_platform="$(real_tmux_script_platform)"
+  case "$script_platform" in
+    Darwin)
+      script -q "$log_file" tmux -S "$REAL_TMUX_SOCKET_PATH" -f /dev/null attach-session -t "$session_name" >/dev/null 2>&1 &
+      ;;
+    *)
+      script -q "$log_file" -- tmux -S "$REAL_TMUX_SOCKET_PATH" -f /dev/null attach-session -t "$session_name" >/dev/null 2>&1 &
+      ;;
+  esac
+  printf '%s\n' "$!"
+}
+
 real_tmux_run_shell_capture() {
   local shell_command=""
   local token="$$.$RANDOM"
@@ -142,4 +181,23 @@ real_tmux_wait_for_capture() {
 
   printf '%s\n' "$capture"
   fail "pane [$pane_id] never rendered [$expected]"
+}
+
+real_tmux_wait_for_client_tty() {
+  local attempts="${1:-100}"
+  local client_tty=""
+  local client_snapshot=""
+  local _attempt
+
+  for _attempt in $(seq 1 "$attempts"); do
+    client_tty="$(real_tmux list-clients -F '#{client_tty}' 2>/dev/null | sed -n '1p')"
+    if [ -n "$client_tty" ]; then
+      printf '%s\n' "$client_tty"
+      return 0
+    fi
+    sleep 0.05
+  done
+
+  client_snapshot="$(real_tmux list-clients -F '#{client_name}|#{client_tty}' 2>&1 || true)"
+  fail "tmux client did not attach; clients: [$client_snapshot]"
 }
