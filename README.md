@@ -95,6 +95,8 @@ Then `tmux source-file ~/.tmux.conf`.
 | ------------ | -------------------------------- |
 | `j` / `Down` | Move selection down              |
 | `k` / `Up`   | Move selection up                |
+| `gg`         | Jump to the top of the list      |
+| `G`          | Jump to the bottom of the list   |
 | `Enter`      | Jump to the selected pane        |
 | `aw`         | Add a window (prompts for name)  |
 | `as`         | Add a session (prompts for name) |
@@ -149,13 +151,15 @@ Override the default sidebar shortcuts:
 ```tmux
 set -g @tmux_sidebar_add_window_shortcut  zw   # default: aw
 set -g @tmux_sidebar_add_session_shortcut zs   # default: as
+set -g @tmux_sidebar_go_top_shortcut      tt   # default: gg
+set -g @tmux_sidebar_go_bottom_shortcut   B    # default: G
 set -g @tmux_sidebar_rename_window_shortcut rw # default: rw
 set -g @tmux_sidebar_rename_session_shortcut rs # default: rs
 set -g @tmux_sidebar_close_pane_shortcut  dd   # default: x
 ```
 
 Shortcuts are validated on load. If any value is empty, duplicates another,
-overlaps as a prefix, or contains the reserved `q` key, all five revert to
+overlaps as a prefix, or contains the reserved `q` key, all seven revert to
 defaults.
 
 ### Scroll offset
@@ -223,6 +227,8 @@ set -g @tmux_sidebar_focus_key   B    # default: T
 | `@tmux_sidebar_session_order`        |    —    | Comma-separated session ordering |
 | `@tmux_sidebar_add_window_shortcut`  |  `aw`   | Shortcut to add a window         |
 | `@tmux_sidebar_add_session_shortcut` |  `as`   | Shortcut to add a session        |
+| `@tmux_sidebar_go_top_shortcut`      |  `gg`   | Shortcut to jump to the top      |
+| `@tmux_sidebar_go_bottom_shortcut`   |   `G`   | Shortcut to jump to the bottom   |
 | `@tmux_sidebar_rename_window_shortcut` | `rw` | Shortcut to rename a window      |
 | `@tmux_sidebar_rename_session_shortcut` | `rs` | Shortcut to rename a session     |
 | `@tmux_sidebar_close_pane_shortcut`  |   `x`   | Shortcut to close selected pane  |
