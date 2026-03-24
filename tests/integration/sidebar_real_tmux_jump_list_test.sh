@@ -60,69 +60,14 @@ real_tmux send-keys -t "$sidebar_pane_id" g g
 top_capture="$(wait_for_selected_capture "$sidebar_pane_id" '▶ │     └─ cat')"
 assert_contains "$top_capture" 'ops'
 
-output="$(python3 - "$REAL_TMUX_SOCKET_PATH" "$sidebar_pane_id" work <<'PY'
-from __future__ import annotations
+printf -v request_jump_back_cmd 'TMUX_PANE=%q TMUX_SIDEBAR_STATE_DIR=%q bash %q jump_back' \
+  "$sidebar_pane_id" "$REAL_TMUX_STATE_DIR" "$REPO_ROOT/scripts/features/sidebar/request-sidebar-action.sh"
+real_tmux run-shell -b "$request_jump_back_cmd"
+back_capture="$(wait_for_selected_capture "$sidebar_pane_id" '▶       └─ tail')"
+assert_contains "$back_capture" 'tailing'
 
-import json
-import os
-import pty
-import subprocess
-import sys
-import time
-
-socket_path, pane_id, session_name = sys.argv[1:4]
-master_fd, slave_fd = pty.openpty()
-child = subprocess.Popen(
-    ["tmux", "-S", socket_path, "-f", "/dev/null", "attach-session", "-t", session_name],
-    stdin=slave_fd,
-    stdout=slave_fd,
-    stderr=slave_fd,
-    close_fds=True,
-)
-os.close(slave_fd)
-
-
-def capture() -> str:
-    return subprocess.check_output(
-        ["tmux", "-S", socket_path, "-f", "/dev/null", "capture-pane", "-pt", pane_id],
-        text=True,
-    )
-
-
-def wait_contains(expected: str, timeout: float = 5.0) -> str:
-    deadline = time.time() + timeout
-    last_capture = ""
-    while time.time() < deadline:
-        last_capture = capture()
-        if expected in last_capture:
-            return last_capture
-        time.sleep(0.05)
-    raise RuntimeError(f"pane never selected {expected!r}: {last_capture!r}")
-
-
-def send_bytes(data: bytes, expected: str) -> str:
-    os.write(master_fd, data)
-    return wait_contains(expected)
-
-
-try:
-    time.sleep(0.2)
-    result = {
-        "after_ctrl_p_once": send_bytes(bytes.fromhex("10"), "▶       └─ tail"),
-        "after_ctrl_n": send_bytes(bytes.fromhex("0e"), "▶ │     └─ cat"),
-    }
-    print(json.dumps(result, ensure_ascii=False))
-finally:
-    if child.poll() is None:
-        child.terminate()
-        try:
-            child.wait(timeout=1)
-        except subprocess.TimeoutExpired:
-            child.kill()
-            child.wait()
-    os.close(master_fd)
-PY
-)"
-
-assert_contains "$output" '▶       └─ tail'
-assert_contains "$output" '▶ │     └─ cat'
+printf -v request_jump_forward_cmd 'TMUX_PANE=%q TMUX_SIDEBAR_STATE_DIR=%q bash %q jump_forward' \
+  "$sidebar_pane_id" "$REAL_TMUX_STATE_DIR" "$REPO_ROOT/scripts/features/sidebar/request-sidebar-action.sh"
+real_tmux run-shell -b "$request_jump_forward_cmd"
+forward_capture="$(wait_for_selected_capture "$sidebar_pane_id" '▶ │     └─ cat')"
+assert_contains "$forward_capture" 'ops'

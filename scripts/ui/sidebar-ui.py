@@ -96,6 +96,35 @@ def _remove_pid_file() -> None:
         pass
 
 
+def _action_file_path() -> Path | None:
+    pane = os.environ.get("TMUX_PANE", "")
+    if not pane:
+        return None
+    return STATE_DIR / f"sidebar-{pane}.actions"
+
+
+def _consume_sidebar_actions() -> list[str]:
+    action_path = _action_file_path()
+    if action_path is None:
+        return []
+    pending_path = action_path.with_name(f"{action_path.name}.{os.getpid()}.pending")
+    try:
+        action_path.replace(pending_path)
+    except FileNotFoundError:
+        return []
+    except OSError:
+        return []
+    try:
+        actions = [line.strip() for line in pending_path.read_text().splitlines()]
+    except OSError:
+        actions = []
+    try:
+        pending_path.unlink(missing_ok=True)
+    except OSError:
+        pass
+    return [action for action in actions if action in {"jump_back", "jump_forward"}]
+
+
 def toggle_hide_panes() -> None:
     current = tmux_option("@tmux_sidebar_hide_panes").lower() in ("on", "1", "true", "yes")
     new_value = "off" if current else "on"
@@ -268,6 +297,7 @@ def run_interactive(stdscr) -> None:
             prev_pane = selected_pane_id
             rows, pane_rows, shortcuts, selected_pane_id = load_view_state(selected_pane_id)
             has_focus = sidebar_has_focus()
+            sidebar_actions = _consume_sidebar_actions()
             scrolloff = configured_scrolloff()
             next_refresh_at = now + REFRESH_INTERVAL_SECONDS
             if not has_focus:
@@ -275,6 +305,14 @@ def run_interactive(stdscr) -> None:
                 jump_index = -1
             else:
                 jump_list, jump_index = seed_jump_list(jump_list, jump_index, selected_pane_id)
+                for sidebar_action in sidebar_actions:
+                    if sidebar_action == "jump_back":
+                        next_selected, jump_index = jump_list_target(jump_list, jump_index, -1)
+                    else:
+                        next_selected, jump_index = jump_list_target(jump_list, jump_index, 1)
+                    if next_selected is not None:
+                        selected_pane_id = next_selected
+                        user_scrolled = False
             if selected_pane_id != prev_pane:
                 user_scrolled = False
             if search_query:

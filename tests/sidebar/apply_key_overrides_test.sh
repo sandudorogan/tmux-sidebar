@@ -5,13 +5,13 @@ set -euo pipefail
 
 PLUGIN_DIR="$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-# Test 1: No overrides set -> no bind/unbind commands
+# Test 1: No toggle/focus overrides set -> no toggle/focus rebinds
 fake_tmux_no_sidebar
 
 TMUX_SIDEBAR_PLUGIN_DIR="$PLUGIN_DIR" bash scripts/features/sidebar/apply-key-overrides.sh
 
-assert_not_contains "$(cat "$TEST_TMUX_DATA_DIR/commands.log")" 'bind-key'
-assert_not_contains "$(cat "$TEST_TMUX_DATA_DIR/commands.log")" 'unbind-key'
+assert_not_contains "$(cat "$TEST_TMUX_DATA_DIR/commands.log")" 'unbind-key t'
+assert_not_contains "$(cat "$TEST_TMUX_DATA_DIR/commands.log")" 'unbind-key T'
 
 # Test 2: Custom toggle key -> unbinds t, binds new key
 fake_tmux_no_sidebar
