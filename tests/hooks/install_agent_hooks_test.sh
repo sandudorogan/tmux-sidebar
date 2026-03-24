@@ -27,6 +27,7 @@ TIMESTAMP="20260320000000" \
 bash "$REPO_ROOT/scripts/features/hooks/install-agent-hooks.sh"
 
 assert_file_contains "$CLAUDE_SETTINGS" 'scripts/features/hooks/hook-claude.sh'
+assert_file_contains "$CLAUDE_SETTINGS" '"SubagentStop"'
 assert_file_contains "$CODEX_CONFIG" 'scripts/features/hooks/hook-codex.sh'
 assert_file_contains "$OPENCODE_PLUGIN" 'scripts/features/hooks/hook-opencode.sh'
 assert_file_contains "$OPENCODE_PLUGIN" 'properties?.status?.type'

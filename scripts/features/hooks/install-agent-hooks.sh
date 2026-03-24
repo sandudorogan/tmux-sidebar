@@ -58,6 +58,7 @@ for event_name, async_enabled in [
     ("SessionStart", False),
     ("UserPromptSubmit", True),
     ("Stop", True),
+    ("SubagentStop", True),
     ("Notification", True),
     ("PermissionRequest", True),
     ("SessionEnd", True),

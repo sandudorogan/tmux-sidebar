@@ -43,6 +43,10 @@ export TEST_HOOK_CAPTURE="$TEST_TMP/claude-hook-submit.txt"
 printf '%s' '{"hook_event_name":"UserPromptSubmit"}' | bash scripts/features/hooks/hook-claude.sh
 assert_file_contains "$TEST_HOOK_CAPTURE" '--status running'
 
+export TEST_HOOK_CAPTURE="$TEST_TMP/claude-hook-subagent-stop.txt"
+printf '%s' '{"hook_event_name":"SubagentStop","message":"Finished subagent task"}' | bash scripts/features/hooks/hook-claude.sh
+assert_file_contains "$TEST_HOOK_CAPTURE" '--status done'
+
 export TEST_HOOK_CAPTURE="$TEST_TMP/codex-hook.txt"
 export TEST_PEON_CAPTURE="$TEST_TMP/peon-argv.txt"
 export TEST_PEON_STDIN_CAPTURE="$TEST_TMP/peon-stdin.txt"

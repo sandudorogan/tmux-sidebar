@@ -33,7 +33,7 @@ def parse_claude(payload: str) -> tuple[str, str]:
         status = "idle"
     elif event in ("Notification", "PermissionRequest"):
         status = "needs-input"
-    elif event == "Stop":
+    elif event in ("Stop", "SubagentStop"):
         status = "done"
     elif event == "PostToolUseFailure":
         status = "error"
