@@ -18,6 +18,8 @@ DEFAULT_SHORTCUTS = {
     "add_session": "as",
     "go_top": "gg",
     "go_bottom": "G",
+    "jump_back": "C-o",
+    "jump_forward": "C-i",
     "rename_session": "rs",
     "rename_window": "rw",
     "close_pane": "x",
@@ -106,6 +108,13 @@ def configured_shortcuts() -> dict[str, str]:
     ):
         return dict(DEFAULT_SHORTCUTS)
     return shortcuts
+
+
+def shortcut_key_code(shortcut: str) -> int | None:
+    match = re.fullmatch(r"C-([A-Za-z])", shortcut)
+    if match is None:
+        return None
+    return ord(match.group(1).lower()) & 0x1F
 
 
 def sidebar_has_focus() -> bool:

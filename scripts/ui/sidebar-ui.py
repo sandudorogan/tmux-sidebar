@@ -36,6 +36,7 @@ from sidebar_ui_lib.core import (
     prompt_rename_session,
     prompt_rename_window,
     sidebar_has_focus,
+    shortcut_key_code,
     tmux_option,
     toggle_hide_panes,
 )
@@ -141,6 +142,30 @@ def selected_pane_row(pane_rows: list[dict], selected_pane_id: str) -> dict | No
     return next((row for row in pane_rows if row["pane_id"] == selected_pane_id), pane_rows[0] if pane_rows else None)
 
 
+def seed_jump_list(jump_list: list[str], jump_index: int, selected_pane_id: str) -> tuple[list[str], int]:
+    if jump_list or not selected_pane_id:
+        return jump_list, jump_index
+    return [selected_pane_id], 0
+
+
+def record_jump_target(jump_list: list[str], jump_index: int, pane_id: str) -> tuple[list[str], int]:
+    if not pane_id:
+        return jump_list, jump_index
+    if jump_index < len(jump_list) - 1:
+        jump_list = jump_list[: jump_index + 1]
+    if jump_list and jump_list[-1] == pane_id:
+        return jump_list, len(jump_list) - 1
+    jump_list = [*jump_list, pane_id]
+    return jump_list, len(jump_list) - 1
+
+
+def jump_list_target(jump_list: list[str], jump_index: int, direction: int) -> tuple[str | None, int]:
+    next_index = jump_index + direction
+    if next_index < 0 or next_index >= len(jump_list):
+        return None, jump_index
+    return jump_list[next_index], next_index
+
+
 def process_keypress(
     key: int,
     selected_pane_id: str,
@@ -149,6 +174,9 @@ def process_keypress(
     shortcuts: dict[str, str],
 ) -> tuple[str, str, str | None, bool]:
     key_char = chr(key) if 0 <= key <= 255 and chr(key).isprintable() else ""
+    control_action = next((name for name, shortcut in shortcuts.items() if shortcut_key_code(shortcut) == key), None)
+    if control_action is not None:
+        return "", selected_pane_id, control_action, False
     if key == ord("q"):
         return "", selected_pane_id, "close", False
     if key == ord("m"):
@@ -158,10 +186,10 @@ def process_keypress(
         pending_key, action = advance_shortcut_state(pending_key, key_char, shortcuts)
         if action == "go_top" and pane_rows:
             next_selected = pane_rows[0]["pane_id"]
-            return pending_key, next_selected, None, next_selected != selected_pane_id
+            return pending_key, next_selected, action, next_selected != selected_pane_id
         if action == "go_bottom" and pane_rows:
             next_selected = pane_rows[-1]["pane_id"]
-            return pending_key, next_selected, None, next_selected != selected_pane_id
+            return pending_key, next_selected, action, next_selected != selected_pane_id
         return pending_key, selected_pane_id, action, False
 
     pending_key = ""
@@ -221,6 +249,8 @@ def run_interactive(stdscr) -> None:
     search_mode = False
     search_query = ""
     search_matches: set[int] = set()
+    jump_list: list[str] = []
+    jump_index = -1
 
     while True:
         now = time.monotonic()
@@ -230,8 +260,14 @@ def run_interactive(stdscr) -> None:
         if next_refresh_at == 0.0 or signaled or now >= next_refresh_at:
             prev_pane = selected_pane_id
             rows, pane_rows, shortcuts, selected_pane_id = load_view_state(selected_pane_id)
+            has_focus = sidebar_has_focus()
             scrolloff = configured_scrolloff()
             next_refresh_at = now + REFRESH_INTERVAL_SECONDS
+            if not has_focus:
+                jump_list = []
+                jump_index = -1
+            else:
+                jump_list, jump_index = seed_jump_list(jump_list, jump_index, selected_pane_id)
             if selected_pane_id != prev_pane:
                 user_scrolled = False
             if search_query:
@@ -386,6 +422,8 @@ def run_interactive(stdscr) -> None:
             shortcuts,
         )
         if selection_changed:
+            if action in ("go_top", "go_bottom"):
+                jump_list, jump_index = record_jump_target(jump_list, jump_index, selected_pane_id)
             user_scrolled = False
             selected_index = find_selected_row_index(rows, selected_pane_id)
             visible_lines = curses.LINES - (1 if search_query else 0)
@@ -427,6 +465,24 @@ def run_interactive(stdscr) -> None:
         elif action == "focus_main":
             focus_main_pane()
             next_refresh_at = 0.0
+        elif action == "jump_back":
+            next_selected, jump_index = jump_list_target(jump_list, jump_index, -1)
+            if next_selected is not None:
+                selected_pane_id = next_selected
+                user_scrolled = False
+                selected_index = find_selected_row_index(rows, selected_pane_id)
+                visible_lines = curses.LINES - (1 if search_query else 0)
+                scroll_offset = ensure_visible(selected_index, scroll_offset, visible_lines, scrolloff)
+                needs_render = True
+        elif action == "jump_forward":
+            next_selected, jump_index = jump_list_target(jump_list, jump_index, 1)
+            if next_selected is not None:
+                selected_pane_id = next_selected
+                user_scrolled = False
+                selected_index = find_selected_row_index(rows, selected_pane_id)
+                visible_lines = curses.LINES - (1 if search_query else 0)
+                scroll_offset = ensure_visible(selected_index, scroll_offset, visible_lines, scrolloff)
+                needs_render = True
         elif action == "select_pane" and target is not None:
             subprocess.run(["tmux", "switch-client", "-t", target["session"]], check=False)
             subprocess.run(["tmux", "select-window", "-t", target["window"]], check=False)
