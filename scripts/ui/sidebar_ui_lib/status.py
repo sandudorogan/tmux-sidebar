@@ -70,6 +70,10 @@ def looks_like_codex(value: str) -> bool:
     return normalize_token(value).startswith("codex")
 
 
+def looks_like_opencode(value: str) -> bool:
+    return normalize_token(value).startswith("opencode")
+
+
 def looks_like_claude(value: str) -> bool:
     token = normalize_token(value)
     if token == "claude" or token.startswith("claude-") or token.startswith("claude_"):
@@ -90,7 +94,7 @@ def should_preserve_live_label(command: str, title: str) -> bool:
 def state_agent_app(command: str, title: str, state: dict | None) -> str:
     app = str((state or {}).get("app", "")).strip().lower()
     status = str((state or {}).get("status", "")).strip().lower()
-    if app not in ("claude", "codex"):
+    if app not in ("claude", "codex", "opencode"):
         return ""
     if should_preserve_live_label(command, title):
         return ""
@@ -119,6 +123,8 @@ def claude_title_status(title: str) -> str:
 def live_agent_app(command: str, title: str, state: dict | None) -> str:
     if looks_like_codex(command) or looks_like_codex(title):
         return "codex"
+    if looks_like_opencode(command) or looks_like_opencode(title):
+        return "opencode"
     if looks_like_claude(command) or looks_like_claude(title):
         return "claude"
     if looks_like_semver(command) and not should_preserve_live_label(command, title):
@@ -170,7 +176,12 @@ def pane_display_label(command: str, title: str, state: dict | None) -> str:
 
 
 def auto_window_name(window_name: str, panes: list[dict]) -> bool:
-    if looks_like_semver(window_name) or looks_like_codex(window_name) or looks_like_claude(window_name):
+    if (
+        looks_like_semver(window_name)
+        or looks_like_codex(window_name)
+        or looks_like_opencode(window_name)
+        or looks_like_claude(window_name)
+    ):
         return True
     active_pane = next((pane for pane in panes if pane["active"]), panes[0] if panes else None)
     if active_pane is None:

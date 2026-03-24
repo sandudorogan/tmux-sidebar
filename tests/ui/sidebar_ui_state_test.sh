@@ -145,6 +145,17 @@ output="$(python3 scripts/ui/sidebar-ui.py --dump-render 2>&1)"
 assert_contains "$output" 'codex ⏳'
 
 fake_tmux_set_tree <<'EOF'
+work|@1|editor|%111|node|repo worker|1
+EOF
+cat > "$TMUX_SIDEBAR_STATE_DIR/pane-%111.json" <<'EOF'
+{"pane_id":"%111","app":"opencode","status":"running","updated_at":100}
+EOF
+
+output="$(python3 scripts/ui/sidebar-ui.py --dump-render 2>&1)"
+
+assert_contains "$output" 'opencode ⏳'
+
+fake_tmux_set_tree <<'EOF'
 work|@1|editor|%8|codex-aarch64-apple-darwin|● project: done|1
 EOF
 cat > "$TMUX_SIDEBAR_STATE_DIR/pane-%8.json" <<'EOF'

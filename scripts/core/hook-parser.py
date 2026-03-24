@@ -126,15 +126,15 @@ def parse_opencode(event: str, payload: str) -> tuple[str, str]:
     status_hint = str(data.get("status") or data.get("state") or "").strip().lower().replace("_", "-")
     message = str(data.get("summary") or data.get("transcript_summary") or data.get("message") or "").strip()
 
-    if raw_event in ("error", "fail", "failure") or status_hint in ("error", "failed"):
+    if raw_event == "session.error" or status_hint in ("error", "failed"):
         status = "error"
-    elif raw_event.startswith("permission") or raw_event.startswith("approve") or raw_event == "input-required":
+    elif raw_event == "permission.asked":
         status = "needs-input"
-    elif raw_event in ("session-start", "idle-prompt") or status_hint in ("idle", "ready"):
+    elif raw_event == "session.created" or status_hint in ("idle", "ready"):
         status = "idle"
-    elif raw_event == "start" or status_hint == "running":
+    elif raw_event == "session.status" or status_hint == "running":
         status = "running"
-    elif raw_event in ("complete", "completed", "done", "finish", "finished", "stop", "stopped", "session-end"):
+    elif raw_event == "session.idle":
         status = "done"
     else:
         status = "needs-input" if status_hint else ""

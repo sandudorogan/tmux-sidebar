@@ -111,15 +111,23 @@ printf '%s' '{"summary":"Ready"}' | bash scripts/features/hooks/hook-codex.sh se
 assert_file_contains "$TEST_HOOK_CAPTURE" '--status idle'
 
 export TEST_HOOK_CAPTURE="$TEST_TMP/opencode-hook.txt"
-printf '%s' '{"event":"session-start","status":"ready","message":"Ready"}' | bash scripts/features/hooks/hook-opencode.sh
+printf '%s' '{"event":"session.created","status":"ready","message":"Ready"}' | bash scripts/features/hooks/hook-opencode.sh
 assert_file_contains "$TEST_HOOK_CAPTURE" '--app opencode'
 assert_file_contains "$TEST_HOOK_CAPTURE" '--status idle'
 assert_file_contains "$TEST_HOOK_CAPTURE" '--message Ready'
 
 export TEST_HOOK_CAPTURE="$TEST_TMP/opencode-hook-input.txt"
-printf '%s' '{"event":"permission-requested","message":"Need approval"}' | bash scripts/features/hooks/hook-opencode.sh
+printf '%s' '{"event":"permission.asked","message":"Need approval"}' | bash scripts/features/hooks/hook-opencode.sh
 assert_file_contains "$TEST_HOOK_CAPTURE" '--status needs-input'
 
 export TEST_HOOK_CAPTURE="$TEST_TMP/opencode-hook-running.txt"
 printf '%s' '{"status":"running","message":"Working"}' | bash scripts/features/hooks/hook-opencode.sh
 assert_file_contains "$TEST_HOOK_CAPTURE" '--status running'
+
+export TEST_HOOK_CAPTURE="$TEST_TMP/opencode-hook-session-status.txt"
+printf '%s' '{"event":"session.status","message":"Working"}' | bash scripts/features/hooks/hook-opencode.sh
+assert_file_contains "$TEST_HOOK_CAPTURE" '--status running'
+
+export TEST_HOOK_CAPTURE="$TEST_TMP/opencode-hook-session-idle.txt"
+printf '%s' '{"event":"session.idle","message":"Ready"}' | bash scripts/features/hooks/hook-opencode.sh
+assert_file_contains "$TEST_HOOK_CAPTURE" '--status done'
