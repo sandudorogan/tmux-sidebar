@@ -102,6 +102,13 @@ def toggle_hide_panes() -> None:
     subprocess.run(["tmux", "set", "-g", "@tmux_sidebar_hide_panes", new_value], check=False)
 
 
+def toggle_filter() -> None:
+    current = tmux_option("@tmux_sidebar_filter_enabled").strip().lower()
+    enabled = current not in ("off", "0", "false", "no")
+    new_value = "off" if enabled else "on"
+    subprocess.run(["tmux", "set", "-g", "@tmux_sidebar_filter_enabled", new_value], check=False)
+
+
 def advance_shortcut_state(pending_key: str, key_char: str, shortcuts: dict[str, str]) -> tuple[str, str | None]:
     candidate = pending_key + key_char if pending_key else key_char
     action = next((name for name, shortcut in shortcuts.items() if shortcut == candidate), None)
@@ -459,6 +466,10 @@ def run_interactive(stdscr) -> None:
                 else:
                     subprocess.run(["tmux", "kill-window", "-t", target["window"]], check=False)
             next_refresh_at = 0.0
+        elif action == "toggle_filter":
+            toggle_filter()
+            next_refresh_at = 0.0
+            needs_render = True
         elif action == "close":
             close_sidebar()
             break

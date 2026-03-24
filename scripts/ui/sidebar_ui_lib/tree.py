@@ -5,7 +5,7 @@ import subprocess
 from collections import OrderedDict
 
 from .core import STATE_DIR, SIDEBAR_TITLES, configured_sidebar_width, run_tmux, tmux_option
-from .status import badge_for_status, effective_pane_status, pane_display_label, window_display_name
+from .status import badge_for_status, effective_pane_status, normalize_token, pane_display_label, window_display_name
 
 
 def ordered_sessions(sessions: OrderedDict[str, dict]) -> list[dict]:
@@ -27,6 +27,30 @@ def ordered_sessions(sessions: OrderedDict[str, dict]) -> list[dict]:
             continue
         ordered.append(session)
     return ordered
+
+
+def configured_filter_tokens() -> list[str]:
+    enabled_raw = tmux_option("@tmux_sidebar_filter_enabled").strip().lower()
+    if enabled_raw in ("off", "0", "false", "no"):
+        return []
+    return [
+        token
+        for token in (normalize_token(value) for value in tmux_option("@tmux_sidebar_filter").split(","))
+        if token
+    ]
+
+
+def pane_matches_filter(pane: dict, pane_state: dict, filter_tokens: list[str]) -> bool:
+    if not filter_tokens:
+        return True
+    candidates = [
+        normalize_token(pane["label"]),
+        normalize_token(pane["title"]),
+        normalize_token(str(pane_state.get("app", ""))),
+        pane["label"].strip().lower(),
+        pane["title"].strip().lower(),
+    ]
+    return any(token and any(token in candidate for candidate in candidates if candidate) for token in filter_tokens)
 
 
 def load_tree() -> list[dict]:
@@ -64,18 +88,6 @@ def load_tree() -> list[dict]:
             }
         )
 
-    filtered_sessions: OrderedDict[str, dict] = OrderedDict()
-    for session_name, session in sessions.items():
-        filtered_windows: OrderedDict[str, dict] = OrderedDict()
-        for window_id, window in session["windows"].items():
-            panes = [pane for pane in window["panes"] if pane["title"] not in SIDEBAR_TITLES]
-            if not panes:
-                continue
-            filtered_windows[window_id] = {**window, "panes": panes}
-        if filtered_windows:
-            filtered_sessions[session_name] = {**session, "windows": filtered_windows}
-    sessions = filtered_sessions
-
     pane_states: dict[str, dict] = {}
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     for state_file in STATE_DIR.glob("pane-*.json"):
@@ -90,6 +102,24 @@ def load_tree() -> list[dict]:
             pane_states[pane_id] = json.loads(state_file.read_text())
         except Exception:
             continue
+
+    filter_tokens = configured_filter_tokens()
+
+    filtered_sessions: OrderedDict[str, dict] = OrderedDict()
+    for session_name, session in sessions.items():
+        filtered_windows: OrderedDict[str, dict] = OrderedDict()
+        for window_id, window in session["windows"].items():
+            panes = [
+                pane
+                for pane in window["panes"]
+                if pane["title"] not in SIDEBAR_TITLES and pane_matches_filter(pane, pane_states.get(pane["id"], {}), filter_tokens)
+            ]
+            if not panes:
+                continue
+            filtered_windows[window_id] = {**window, "panes": panes}
+        if filtered_windows:
+            filtered_sessions[session_name] = {**session, "windows": filtered_windows}
+    sessions = filtered_sessions
 
     hide_panes = tmux_option("@tmux_sidebar_hide_panes").lower() in ("on", "1", "true", "yes")
 

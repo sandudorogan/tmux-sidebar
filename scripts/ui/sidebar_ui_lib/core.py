@@ -23,6 +23,7 @@ DEFAULT_SHORTCUTS = {
     "rename_session": "rs",
     "rename_window": "rw",
     "close_pane": "x",
+    "toggle_filter": "f",
 }
 SIDEBAR_TITLES = {"Sidebar", "tmux-sidebar"}
 INPUT_POLL_MS = 25
