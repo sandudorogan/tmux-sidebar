@@ -56,5 +56,5 @@ bottom_capture="$(wait_for_selected_capture "$sidebar_pane_id" '▶       └─
 assert_contains "$bottom_capture" 'tailing'
 
 real_tmux send-keys -t "$sidebar_pane_id" g g
-top_capture="$(wait_for_selected_capture "$sidebar_pane_id" '▶ │     └─ ? cat')"
+top_capture="$(wait_for_selected_capture "$sidebar_pane_id" '▶ │     └─ c cat')"
 assert_contains "$top_capture" 'ops'

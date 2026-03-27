@@ -3,6 +3,7 @@ set -euo pipefail
 
 TEST_TMP="$(mktemp -d "${TMPDIR:-/tmp}/tmux-sidebar-tests.XXXXXX")"
 trap 'rm -rf "$TEST_TMP"' EXIT
+export TMUX_SIDEBAR_GHOSTTY_CONFIG="$TEST_TMP/no-ghostty-config"
 
 output=""
 TEST_BIN="$TEST_TMP/bin"

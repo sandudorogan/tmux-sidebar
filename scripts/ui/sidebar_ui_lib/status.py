@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import re
+from pathlib import Path
 
 from .core import run_tmux, tmux_option
 
@@ -45,8 +47,10 @@ ASCII_ICONS: dict[str, str] = {
     "yazi": "Y",
     "ranger": "R",
     "bb": "B",
+    "cat": "c",
     "clojure": "L",
     "java": "J",
+    "less": ":",
     "vim": "V",
     "ssh": "@",
     "pager": ":",
@@ -67,8 +71,10 @@ UNICODE_ICONS: dict[str, str] = {
     "yazi": "▤",
     "ranger": "▥",
     "bb": "β",
+    "cat": "⌂",
     "clojure": "λ",
     "java": "♨",
+    "less": "↕",
     "vim": "◇",
     "ssh": "↗",
     "pager": "↕",
@@ -76,8 +82,33 @@ UNICODE_ICONS: dict[str, str] = {
     "tmux": "⊞",
     "unknown": "·",
 }
+NERD_FONT_ICONS: dict[str, str] = {
+    "claude": "\U000f0d70",
+    "codex": "\U000f0d70",
+    "opencode": "\U000f0d70",
+    "cursor": "\U000f0d70",
+    "shell": "\U000f016c",
+    "node": "\ue719",
+    "python": "\ue73c",
+    "git": "\ue702",
+    "lazygit": "\ue8a9",
+    "yazi": "\U000f024b",
+    "ranger": "\ueb86",
+    "bb": "\ue768",
+    "cat": "\U000f011b",
+    "clojure": "\ue768",
+    "java": "\ue738",
+    "less": "\ue758",
+    "vim": "\ue7c5",
+    "ssh": "\ue8b1",
+    "pager": "\ueb2f",
+    "top": "\U000f1513",
+    "tmux": "\uebc8",
+    "unknown": "\ueb32",
+}
 ICON_THEMES: dict[str, dict[str, str]] = {
     "ascii": ASCII_ICONS,
+    "nerdfont": NERD_FONT_ICONS,
     "unicode": UNICODE_ICONS,
 }
 APP_ALIASES: dict[str, str] = {
@@ -102,9 +133,11 @@ APP_ALIASES: dict[str, str] = {
     "ranger": "ranger",
     "bb": "bb",
     "babashka": "bb",
+    "cat": "cat",
     "clj": "clojure",
     "clojure": "clojure",
     "java": "java",
+    "less": "less",
     "vi": "vim",
     "vim": "vim",
     "nvim": "vim",
@@ -112,11 +145,11 @@ APP_ALIASES: dict[str, str] = {
     "ssh": "ssh",
     "mosh": "ssh",
     "mosh-client": "ssh",
-    "less": "pager",
     "more": "pager",
     "most": "pager",
     "tail": "pager",
     "atop": "top",
+    "bpytop": "top",
     "btop": "top",
     "htop": "top",
     "top": "top",
@@ -129,6 +162,7 @@ BADGE_OPTIONS: dict[str, str] = {
     "error": "@tmux_sidebar_badge_error",
 }
 ICON_THEME_OPTION = "@tmux_sidebar_icon_theme"
+GHOSTTY_CONFIG_ENV = "TMUX_SIDEBAR_GHOSTTY_CONFIG"
 
 _badge_cache: dict[str, str] | None = None
 _icon_cache: dict[str, str] | None = None
@@ -151,11 +185,51 @@ def badge_for_status(status: str) -> str:
     return configured_badges().get(status, "")
 
 
+def ghostty_config_paths() -> tuple[Path, ...]:
+    override = os.environ.get(GHOSTTY_CONFIG_ENV)
+    if override is not None:
+        return (Path(override),)
+    xdg_config_home = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config")))
+    return (
+        xdg_config_home / "ghostty" / "config",
+        Path.home() / ".config" / "ghostty" / "config",
+    )
+
+
+def ghostty_uses_nerd_font() -> bool:
+    for config_path in ghostty_config_paths():
+        try:
+            raw = config_path.read_text()
+        except OSError:
+            continue
+        for line in raw.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if "=" not in stripped:
+                continue
+            key, value = (part.strip().lower() for part in stripped.split("=", 1))
+            if key != "font-family":
+                continue
+            if "nerd font" in value or "symbols nerd font" in value or value.endswith(" nfm"):
+                return True
+    return False
+
+
+def configured_icon_theme() -> str:
+    theme_name = tmux_option(ICON_THEME_OPTION).strip().lower()
+    if theme_name and theme_name != "auto":
+        return theme_name
+    if ghostty_uses_nerd_font():
+        return "nerdfont"
+    return "ascii"
+
+
 def configured_icons() -> dict[str, str]:
     global _icon_cache
     if _icon_cache is not None:
         return _icon_cache
-    theme_name = tmux_option(ICON_THEME_OPTION).strip().lower() or "ascii"
+    theme_name = configured_icon_theme()
     icons = dict(ICON_THEMES.get(theme_name, ASCII_ICONS))
     for app in icons:
         custom = tmux_option(f"@tmux_sidebar_icon_{app}")

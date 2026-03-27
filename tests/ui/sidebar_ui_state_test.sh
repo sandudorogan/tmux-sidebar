@@ -4,6 +4,7 @@ set -euo pipefail
 . "$(dirname "$0")/testlib.sh"
 
 export TMUX_SIDEBAR_STATE_DIR="$TEST_TMP/state"
+export TMUX_SIDEBAR_GHOSTTY_CONFIG="$TEST_TMP/no-ghostty-config"
 mkdir -p "$TMUX_SIDEBAR_STATE_DIR"
 
 fake_tmux_set_tree <<'EOF'
@@ -344,6 +345,32 @@ output="$(python3 scripts/ui/sidebar-ui.py --dump-render 2>&1)"
 assert_contains "$output" 's bash'
 rm -f "$TEST_TMUX_DATA_DIR/option__tmux_sidebar_icon_theme.txt" \
   "$TEST_TMUX_DATA_DIR/option__tmux_sidebar_icon_shell.txt"
+
+fake_tmux_set_tree <<'EOF'
+work|@1|editor|%60|sh|sh|1
+work|@1|editor|%61|less|less|0
+work|@1|editor|%62|cat|cat|0
+work|@1|editor|%63|htop|htop|0
+work|@1|editor|%64|bpytop|bpytop|0
+work|@1|editor|%65|python3|assistant runner|0
+EOF
+cat > "$TMUX_SIDEBAR_STATE_DIR/pane-%65.json" <<'EOF'
+{"pane_id":"%65","app":"claude","status":"running","updated_at":100}
+EOF
+cat > "$TEST_TMP/ghostty-nerdfont-config" <<'EOF'
+font-family = JetBrainsMono Nerd Font Mono
+EOF
+export TMUX_SIDEBAR_GHOSTTY_CONFIG="$TEST_TMP/ghostty-nerdfont-config"
+
+output="$(python3 scripts/ui/sidebar-ui.py --dump-render 2>&1)"
+
+assert_contains "$output" '󰅬 sh'
+assert_contains "$output" ' less'
+assert_contains "$output" '󰄛 cat'
+assert_contains "$output" '󱔓 htop'
+assert_contains "$output" '󱔓 bpytop'
+assert_contains "$output" '󰵰 claude ⏳'
+export TMUX_SIDEBAR_GHOSTTY_CONFIG="$TEST_TMP/no-ghostty-config"
 
 fake_tmux_set_tree <<'EOF'
 work|@1|editor|%2|superlongpanecommand|superlongpanecommand|1

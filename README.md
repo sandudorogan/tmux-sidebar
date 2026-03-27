@@ -220,17 +220,25 @@ set -g @tmux_sidebar_badge_error        "❌"   # default: ❌
 
 ### Pane icons
 
-Pane icons default to an ASCII-safe theme so they render cleanly on most
-systems and fit in the sidebar's narrow default width.
+Pane icons auto-detect Nerd Fonts when tmux is running under a Ghostty setup
+whose `font-family` uses a Nerd Font. Otherwise the sidebar falls back to the
+ASCII-safe theme so it still renders cleanly on most systems and fits in the
+sidebar's narrow default width.
 
 ```tmux
-set -g @tmux_sidebar_icon_theme "ascii"   # default: ascii
+set -g @tmux_sidebar_icon_theme "auto"    # default: auto
+set -g @tmux_sidebar_icon_theme "ascii"   # force ASCII-safe icons
 set -g @tmux_sidebar_icon_theme "unicode" # optional richer built-in theme
+set -g @tmux_sidebar_icon_theme "nerdfont" # force Nerd Font glyphs
 ```
 
 Known panes such as shells, coding agents, `node`, `lazygit`, `yazi`,
 `ranger`, `bb`, `clojure`, `java`, `vim`, `ssh`, pagers, and tmux get
 built-in icons. Unknown commands fall back to a placeholder icon.
+
+The built-in Nerd Font theme uses glyphs such as `nf-md-face_agent` for coding
+agents, `nf-md-code_greater_than` for shells, `nf-dev-less` for `less`,
+`nf-md-cat` for `cat`, and `nf-md-dock_top` for `top`-style monitors.
 
 You can override any individual app icon:
 
@@ -242,8 +250,12 @@ set -g @tmux_sidebar_icon_unknown "?"
 
 Available override keys match the canonical app ids:
 `claude`, `codex`, `opencode`, `cursor`, `shell`, `node`, `python`, `git`,
-`lazygit`, `yazi`, `ranger`, `bb`, `clojure`, `java`, `vim`, `ssh`, `pager`,
-`top`, `tmux`, and `unknown`.
+`lazygit`, `yazi`, `ranger`, `bb`, `cat`, `clojure`, `java`, `less`, `vim`,
+`ssh`, `pager`, `top`, `tmux`, and `unknown`.
+
+If auto-detection picks the wrong theme, set `@tmux_sidebar_icon_theme`
+explicitly. Remote tmux sessions are especially likely to need an explicit
+setting because the server cannot reliably inspect the client terminal font.
 
 ### Colors
 
@@ -299,7 +311,7 @@ set -g @tmux_sidebar_install_agent_hooks 1   # default: 0
 | `@tmux_sidebar_badge_needs_input`     |  `❓`   | Badge for needs-input status     |
 | `@tmux_sidebar_badge_done`            |  `✅`   | Badge for done status            |
 | `@tmux_sidebar_badge_error`           |  `❌`   | Badge for error status           |
-| `@tmux_sidebar_icon_theme`            | `ascii` | Built-in pane icon theme         |
+| `@tmux_sidebar_icon_theme`            | `auto`  | Pane icon theme / auto-detect    |
 | `@tmux_sidebar_color_session`         |    —    | Session name color (hex)         |
 | `@tmux_sidebar_color_window`          |    —    | Window name color (hex)          |
 | `@tmux_sidebar_color_pane`            |    —    | Pane name color (hex)            |
